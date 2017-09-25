@@ -49,7 +49,7 @@ if _HAS_KERAS2_TF:
         _keras.layers.wrappers.Bidirectional: _layers2.convert_bidirectional,
 
         _keras.layers.normalization.BatchNormalization: _layers2.convert_batchnorm,
-        InstanceNormalization: _layers2.convert_instance_norm,
+        _keras.layers.normalization.InstanceNormalization: _layers2.convert_instance_norm,
 
         _keras.layers.Add: _layers2.convert_merge,
         _keras.layers.Multiply: _layers2.convert_merge,

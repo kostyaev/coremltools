@@ -472,7 +472,7 @@ def convert_batchnorm(builder, layer, input_names, output_names, keras_layer):
 
 def convert_instance_norm(builder, layer, input_names, output_names, keras_layer):
     """
-    Convert a Batch Normalization layer.
+    Convert a Instance Normalization layer.
 
     Parameters
     keras_layer: layer
@@ -498,28 +498,14 @@ def convert_instance_norm(builder, layer, input_names, output_names, keras_layer
     if keras_layer.center:
         beta = keras_layer.get_weights()[idx]
         idx += 1
-    mean = keras_layer.get_weights()[idx]
-    std = keras_layer.get_weights()[idx + 1]
-
-    gamma = _np.ones(mean.shape) if gamma is None else gamma
-    beta = _np.zeros(mean.shape) if beta is None else beta
-
-    # compute adjusted parameters
-    variance = std * std
-    f = 1.0 / _np.sqrt(std + keras_layer.epsilon)
-    gamma1 = gamma * f
-    beta1 = beta - gamma * mean * f
-    mean[:] = 0.0  # mean
-    variance[:] = 1.0 - .00001  # stddev
 
     builder.add_batchnorm(
         name=layer,
         channels=nb_channels,
-        gamma=gamma1,
-        beta=beta1,
-        mean=mean,
-        variance=variance,
+        gamma=gamma,
+        beta=beta,
         instance_normalization=True,
+        compute_mean_var=True,
         input_name=input_name,
         output_name=output_name)
 
