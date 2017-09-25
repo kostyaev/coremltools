@@ -6,7 +6,6 @@ from collections import OrderedDict as _OrderedDict
 from ...models import datatypes
 from ...models import MLModel as _MLModel
 from ...models.utils import save_spec as _save_spec
-from ...converters.keras.extension import InstanceNormalization
 
 from ..._deps import HAS_KERAS2_TF as _HAS_KERAS2_TF
 
