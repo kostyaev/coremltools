@@ -6,6 +6,7 @@ from collections import OrderedDict as _OrderedDict
 from ...models import datatypes
 from ...models import MLModel as _MLModel
 from ...models.utils import save_spec as _save_spec
+from ...converters.keras.extension import InstanceNormalization
 
 from ..._deps import HAS_KERAS2_TF as _HAS_KERAS2_TF
 
@@ -13,6 +14,7 @@ if _HAS_KERAS2_TF:
     import keras as _keras
     from . import _layers2
     from . import _topology2
+
     _KERAS_LAYER_REGISTRY  = {
         _keras.layers.core.Dense: _layers2.convert_dense,
         _keras.layers.core.Activation: _layers2.convert_activation,
@@ -47,6 +49,7 @@ if _HAS_KERAS2_TF:
         _keras.layers.wrappers.Bidirectional: _layers2.convert_bidirectional,
 
         _keras.layers.normalization.BatchNormalization: _layers2.convert_batchnorm,
+        InstanceNormalization: _layers2.convert_instance_norm,
 
         _keras.layers.Add: _layers2.convert_merge,
         _keras.layers.Multiply: _layers2.convert_merge,
