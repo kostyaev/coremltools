@@ -6,8 +6,9 @@ from collections import OrderedDict as _OrderedDict
 from ...models import datatypes
 from ...models import MLModel as _MLModel
 from ...models.utils import save_spec as _save_spec
-
+from _utils import _convert_multiarray_output_to_image
 from ..._deps import HAS_KERAS2_TF as _HAS_KERAS2_TF
+import numpy as np
 
 if _HAS_KERAS2_TF:
     import keras as _keras
@@ -139,17 +140,80 @@ def _load_keras_model(model_network_path, model_weight_path):
     return loaded_model
 
 
+def _set_deprocessing(is_grayscale,
+                      builder,
+                      deprocessing_args,
+                      input_name,
+                      output_name):
+    is_bgr = deprocessing_args.get('is_bgr', False)
+
+    _convert_multiarray_output_to_image(
+        builder.spec, output_name, is_bgr=is_bgr
+    )
+
+    image_scale = deprocessing_args.get('image_scale', 1.0)
+
+    if is_grayscale:
+        gray_bias = deprocessing_args.get('gray_bias', 0.0)
+        W = np.array([image_scale])
+        b = np.array([gray_bias])
+    else:
+        W = np.array([image_scale, image_scale, image_scale])
+
+        red_bias = deprocessing_args.get('red_bias', 0.0)
+        green_bias = deprocessing_args.get('green_bias', 0.0)
+        blue_bias = deprocessing_args.get('blue_bias', 0.0)
+
+        if not is_bgr:
+            b = np.array([
+                red_bias,
+                green_bias,
+                blue_bias,
+            ])
+        else:
+            b = np.array([
+                blue_bias,
+                green_bias,
+                red_bias,
+            ])
+
+    print 'Add bias'
+    builder.add_scale(
+        name=input_name,
+        W=np.array([1.0, 1.0, 1.0]),
+        b=b,
+        has_bias=True,
+        shape_scale=W.shape,
+        shape_bias=b.shape,
+        input_name=input_name,
+        output_name=input_name + '_tmp'
+    )
+    print 'Scale image'
+    builder.add_scale(
+        name=input_name,
+        W=W,
+        b=np.array([0.0, 0.0, 0.0]),
+        has_bias=False,
+        shape_scale=W.shape,
+        shape_bias=b.shape,
+        input_name=input_name + '_tmp',
+        output_name=output_name
+    )
+
+
 def _convert(model, 
             input_names = None, 
             output_names = None, 
-            image_input_names = None, 
+            image_input_names = None,
+            image_output_names = None,
             is_bgr = False, 
             red_bias = 0.0, 
             green_bias = 0.0, 
             blue_bias = 0.0, 
             gray_bias = 0.0, 
             image_scale = 1.0, 
-            class_labels = None, 
+            class_labels = None,
+            deprocessing_args={},
             predicted_feature_name = None,
             predicted_probabilities_output = ''):
 
@@ -270,14 +334,31 @@ def _convert(model,
 
     builder = _NeuralNetworkBuilder(input_features, output_features, mode = mode)
 
+    _output_names = output_names[:]
+    original_names = output_names[:]
     for iter, layer in enumerate(graph.layer_list):
         keras_layer = graph.keras_layer_map[layer]
         print("%d : %s, %s" % (iter, layer, keras_layer))
         if isinstance(keras_layer, _keras.layers.wrappers.TimeDistributed):
             keras_layer = keras_layer.layer
         converter_func = _get_layer_converter_fn(keras_layer)
-        input_names, output_names = graph.get_layer_blobs(layer)
-        converter_func(builder, layer, input_names, output_names, keras_layer)
+        input_names, _output_names = graph.get_layer_blobs(layer)
+
+        if iter == len(graph.layer_list) - 1:
+            if not isinstance(output_names, list):
+                output_names = [output_names]
+
+            print output_names
+            for i in range(len(output_names)):
+                if output_names[i] in image_output_names:
+                    output_names[i] += '_deprocess'
+
+            _output_names = output_names
+
+        converter_func(builder, layer, input_names, _output_names, keras_layer)
+    output_names = original_names
+    print 'Output deprocessing names: ' + str(_output_names)
+    print 'Output names: ' + str(output_names)
 
     # Since we aren't mangling anything the user gave us, we only need to update
     # the model interface here
@@ -312,6 +393,27 @@ def _convert(model,
                                           blue_bias = blue_bias, 
                                           gray_bias = gray_bias, 
                                           image_scale = image_scale)
+
+    # set deprocessing parameters
+    if image_output_names:
+        for i in range(len(output_names)):
+            output_name = output_names[i]
+            if output_name in image_output_names:
+                output_shape = (3, deprocessing_args.get('width', 320), deprocessing_args.get('height', 480))
+                if len(output_shape) == 2 or output_shape[0] == 1:
+                    is_grayscale = True
+                elif output_shape[0] == 3:
+                    is_grayscale = False
+                else:
+                    raise ValueError('Output must be RGB image or Grayscale')
+                _set_deprocessing(
+                    is_grayscale,
+                    builder,
+                    deprocessing_args,
+                    _output_names[i],
+                    output_name,
+                )
+                print "Output name:" + output_name
 
     # Return the protobuf spec
     spec = builder.spec
