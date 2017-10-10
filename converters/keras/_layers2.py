@@ -492,10 +492,10 @@ def convert_instance_norm(builder, layer, input_names, output_names, keras_layer
     # Parameter arrangement in Keras: gamma, beta, mean, variance
     idx = 0
     gamma, beta = None, None
-    if keras_layer.scale:
+    if keras_layer.gamma:
         gamma = keras_layer.get_weights()[idx]
         idx += 1
-    if keras_layer.center:
+    if keras_layer.beta:
         beta = keras_layer.get_weights()[idx]
         idx += 1
 
